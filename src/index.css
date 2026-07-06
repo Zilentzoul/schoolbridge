@@ -1,0 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap');
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #E7E3D8; border-radius: 8px; }
+
+input, textarea, button { font-family: 'Inter', system-ui, sans-serif; }
+
+.nav-item:hover { background: #243B57 !important; }
+.row-hover:hover { background: #FBFAF6 !important; }
+.btn:hover { filter: brightness(1.06); }
+
+@keyframes slideUp { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .sidebar-desktop { display: none !important; }
+  .main-pad { padding: 76px 16px 24px !important; }
+  .messages-grid { grid-template-columns: 1fr !important; }
+}
+@media (min-width: 901px) { .topbar-mobile { display: none !important; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
