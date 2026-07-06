@@ -6,12 +6,6 @@
 [build.environment]
   NODE_VERSION = "20"
 
-# Let serverless function calls through before the SPA fallback.
-[[redirects]]
-  from = "/.netlify/functions/*"
-  status = 200
-
-# SPA fallback — every route serves index.html so client-side routing works
 [[redirects]]
   from = "/*"
   to = "/index.html"
