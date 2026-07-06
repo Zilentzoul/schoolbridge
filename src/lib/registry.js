@@ -34,6 +34,111 @@ export function classQueryVariants(className) {
   return [...variants];
 }
 
+// ---- Academic structure (live from the registry) ----
+
+// All class names the registry knows, e.g. ["Basic 4A","Basic 5A", ...].
+export async function getClassList(registryUrl) {
+  if (!registryUrl) return { ok: false, classes: [], error: "not_configured" };
+  try {
+    const u = new URL(registryUrl);
+    u.searchParams.set("action", "getAll");
+    const res = await fetch(u.toString());
+    if (!res.ok) return { ok: false, classes: [], error: "http_" + res.status };
+    const json = await res.json();
+    const students = json.students || {};
+    return { ok: true, classes: Object.keys(students).sort() };
+  } catch (e) {
+    return { ok: false, classes: [], error: String(e) };
+  }
+}
+
+// The roster (array of names) for one exact class name.
+export async function getClassRoster(registryUrl, className) {
+  if (!registryUrl || !className) return { ok: false, names: [] };
+  try {
+    const u = new URL(registryUrl);
+    u.searchParams.set("action", "getClass");
+    u.searchParams.set("cls", className);
+    const res = await fetch(u.toString());
+    if (!res.ok) return { ok: false, names: [] };
+    const json = await res.json();
+    return { ok: true, names: json.students || [] };
+  } catch {
+    return { ok: false, names: [] };
+  }
+}
+
+// Subjects the registry knows about (for grades structure).
+export async function getRegistrySubjects(registryUrl) {
+  if (!registryUrl) return { ok: false, subjects: [] };
+  try {
+    const u = new URL(registryUrl);
+    u.searchParams.set("action", "getSubjects");
+    const res = await fetch(u.toString());
+    if (!res.ok) return { ok: false, subjects: [] };
+    const json = await res.json();
+    return { ok: true, subjects: json.subjects || [] };
+  } catch {
+    return { ok: false, subjects: [] };
+  }
+}
+
+// ---- Name matching / auto-correction for the signup flow ----
+
+function levenshtein(a, b) {
+  a = String(a); b = String(b);
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, (_, i) =>
+    Array.from({ length: n + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+  return dp[m][n];
+}
+
+// Live suggestions (best matches first) as a parent types a ward's name.
+export function suggestNames(typed, roster, limit = 6) {
+  const q = String(typed || "").trim().toLowerCase();
+  if (!q) return [];
+  const scored = roster.map((name) => {
+    const n = name.toLowerCase();
+    let score;
+    if (n === q) score = 0;
+    else if (n.startsWith(q)) score = 1;
+    else if (n.split(/\s+/).some((tok) => tok.startsWith(q))) score = 1.5; // any name-part starts with query
+    else if (n.includes(q)) score = 2;
+    else score = 3 + levenshtein(q, n) / Math.max(n.length, 1);
+    return { name, score };
+  });
+  // Only show genuinely relevant matches: contains the query, a word starts
+  // with it, or it's a close typo (score under ~3.6). Filters out the rest.
+  return scored
+    .filter((s) => s.score <= 3.6)
+    .sort((a, b) => a.score - b.score)
+    .slice(0, limit)
+    .map((s) => s.name);
+}
+
+// Pick the registry's official spelling for what the parent typed
+// (auto-correction). Returns the matched name, or null if none is close.
+export function autoCorrectName(typed, roster) {
+  const q = String(typed || "").trim();
+  if (!q || !roster.length) return null;
+  const ql = q.toLowerCase();
+  const exact = roster.find((n) => n.toLowerCase() === ql);
+  if (exact) return exact;
+  const partial = roster.find((n) => n.toLowerCase().includes(ql) || ql.includes(n.toLowerCase()));
+  if (partial) return partial;
+  let best = null, bestD = 999;
+  roster.forEach((n) => {
+    const d = levenshtein(ql, n.toLowerCase());
+    if (d < bestD) { bestD = d; best = n; }
+  });
+  return bestD <= 4 ? best : null;
+}
+
 // Fetch quiz results for one student from the Registry web app.
 // Returns { ok, results, error }. Never throws.
 export async function getQuizResults(registryUrl, className, studentName) {

@@ -40,9 +40,9 @@ insert into subjects (name, class_level_id) values
 ('French',                '22222222-0000-0000-0000-000000000006');
 
 -- --- Students (wards) ---
-insert into students (id, full_name, avatar_initials, class_level_id, house) values
-('33333333-0000-0000-0000-000000000001', 'Ama Mensah', 'AM', '22222222-0000-0000-0000-000000000006', 'Kente'),
-('33333333-0000-0000-0000-000000000002', 'Kofi Mensah', 'KM', '22222222-0000-0000-0000-000000000003', 'Adinkra');
+-- (Demo students removed — the portal now uses real registry data.)
+-- To add real students, use the admin "Registry (live)" or "Students" screens,
+-- or let parents self-register their wards at signup.
 
 -- --- Link the demo parent to both wards ---
 -- Replace <PARENT_UUID> with the real parent profile id:

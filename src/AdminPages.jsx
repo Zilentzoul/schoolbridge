@@ -457,6 +457,85 @@ export function ClassesSubjects() {
   );
 }
 
+/* ========================= ADMIN: CREATE TEACHER LOGINS ========================= */
+export function CreateTeacher() {
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [role, setRole] = useState("teacher");
+  const [secret, setSecret] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState("");
+  const [error, setError] = useState("");
+
+  async function create() {
+    setError("");
+    if (!email || !password) { setError("Enter an email and a password."); return; }
+    setBusy(true);
+    try {
+      const res = await fetch("/.netlify/functions/create-teacher", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password, full_name: fullName, role, secret }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error || "Could not create the account.");
+      } else {
+        setToast(`${role === "admin" ? "Admin" : "Teacher"} account created for ${email}.`);
+        setFullName(""); setEmail(""); setPassword("");
+        setTimeout(() => setToast(""), 3500);
+      }
+    } catch (e) {
+      setError("Couldn't reach the server. Is the site deployed on Netlify with the function set up?");
+    }
+    setBusy(false);
+  }
+
+  return (
+    <>
+      <Head eyebrow="Staff" title="Create staff logins"
+        sub="Create teacher (or admin) accounts for your school portal. They sign in here with these details." />
+
+      <div style={{ ...card, maxWidth: 520 }}>
+        <SectionLabel icon={UserPlus}>New staff account</SectionLabel>
+        <Field labelText="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="e.g. Mr. Kwame Asante" />
+        <Field labelText="Email (their login)" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="teacher@yourschool.edu.gh" />
+        <Field labelText="Temporary password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="They can change it later" />
+
+        <label style={label}>Role</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          {["teacher", "admin"].map((r) => (
+            <button key={r} type="button" onClick={() => setRole(r)} style={{
+              flex: 1, padding: "10px", borderRadius: 9, cursor: "pointer", textTransform: "capitalize",
+              border: `1px solid ${role === r ? C.gold : C.line}`,
+              background: role === r ? C.goldSoft : "#fff",
+              color: role === r ? "#8A6A1F" : C.mut, fontWeight: 600, fontSize: 13,
+            }}>{r}</button>
+          ))}
+        </div>
+
+        <Field labelText="Create-staff secret" value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="the word set in Netlify (ADMIN_CREATE_SECRET)" />
+        <p style={{ fontSize: 12, color: C.mut, marginTop: -4 }}>
+          This must match the ADMIN_CREATE_SECRET you set in Netlify. It stops anyone but you creating staff logins.
+        </p>
+
+        {error && (
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "#F7E9E4", borderRadius: 9, padding: "10px 12px", margin: "10px 0" }}>
+            <AlertTriangle size={16} color={C.clay} style={{ marginTop: 1 }} />
+            <span style={{ color: C.inkSoft, fontSize: 13, lineHeight: 1.5 }}>{error}</span>
+          </div>
+        )}
+
+        <button style={{ ...btn, marginTop: 8, opacity: busy ? 0.7 : 1 }} onClick={create} disabled={busy}>
+          {busy ? <Loader2 size={16} className="spin" /> : <UserPlus size={16} />} Create account
+        </button>
+      </div>
+      <Toast msg={toast} />
+    </>
+  );
+}
+
 /* ========================= TEACHER: ENTER GRADES ========================= */
 export function EnterGrades() {
   const [students, setStudents] = useState([]);

@@ -65,4 +65,32 @@ create policy "admin manages class_levels extra" on class_levels for all using (
 drop policy if exists "admin reads all profiles" on profiles;
 create policy "admin reads all profiles" on profiles for select using (is_admin() or id = auth.uid() or is_staff());
 
+-- 7) Parent self-signup support.
+-- A lightweight "registry_class" label on students lets a self-registered
+-- ward carry the registry's exact class spelling (grades/quiz/attendance
+-- are read live from the registry by name + class).
+alter table students add column if not exists registry_class text;
+
+-- Allow a signed-in parent to create a ward record during signup and to
+-- link themselves to it. (Admins already have full access via is_admin.)
+drop policy if exists "parent can add ward student" on students;
+create policy "parent can add ward student" on students for insert with check (auth.uid() is not null);
+
+drop policy if exists "signed-in can read students" on students;
+create policy "signed-in can read students" on students for select using (auth.uid() is not null);
+
+drop policy if exists "parent links self to student" on guardianships;
+create policy "parent links self to student" on guardianships for insert
+  with check (parent_id = auth.uid());
+
 -- Done. You should see "Success. No rows returned".
+
+-- 8) Remove the two demo students (Ama Mensah, Kofi Mensah) and anything
+-- linked to them, so the portal starts clean with only real data.
+delete from guardianships where student_id in
+  (select id from students where full_name in ('Ama Mensah','Kofi Mensah'));
+delete from grades where student_id in
+  (select id from students where full_name in ('Ama Mensah','Kofi Mensah'));
+delete from attendance where student_id in
+  (select id from students where full_name in ('Ama Mensah','Kofi Mensah'));
+delete from students where full_name in ('Ama Mensah','Kofi Mensah');

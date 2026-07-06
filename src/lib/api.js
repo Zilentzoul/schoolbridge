@@ -176,6 +176,38 @@ export async function createStudent(row) {
   return supabase.from("students").insert({ ...row, avatar_initials: initials }).select();
 }
 
+// Find a student by registry name + class label, or create a lightweight
+// record if none exists. Used by parent self-signup: the student is the
+// join anchor (grades/quiz/attendance come live from the registry by
+// this name + class), so we store the registry's exact spelling.
+export async function findOrCreateStudentByName(fullName, classLabel) {
+  // Try to find an existing match (case-insensitive on name).
+  const { data: existing } = await supabase
+    .from("students")
+    .select("id, full_name, registry_class")
+    .ilike("full_name", fullName)
+    .limit(1);
+  if (existing && existing.length) return existing[0];
+
+  const initials = (fullName || "")
+    .split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  const { data: created, error } = await supabase
+    .from("students")
+    .insert({ full_name: fullName, registry_class: classLabel, avatar_initials: initials })
+    .select("id, full_name, registry_class");
+  if (error) throw error;
+  return created && created[0];
+}
+
+// The signed-in parent links themselves to a student (used at signup).
+export async function linkMyselfToStudent(studentId) {
+  const { data: u } = await supabase.auth.getUser();
+  const parentId = u?.user?.id;
+  if (!parentId) throw new Error("Not signed in");
+  return supabase.from("guardianships")
+    .insert({ parent_id: parentId, student_id: studentId }).select();
+}
+
 // ---- Admin: link a parent to a student ----
 export async function getParents() {
   const { data } = await supabase

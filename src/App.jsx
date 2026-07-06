@@ -17,7 +17,7 @@ import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { SettingsProvider, useSettings } from "./lib/SettingsProvider";
 import { getQuizResults, getAttendanceForStudent } from "./lib/registry";
 import { downloadRecord } from "./lib/recordExport";
-import { SchoolSettings, ManageStudents, LinkParents, ClassesSubjects, EnterGrades, RegistryManager } from "./AdminPages";
+import { SchoolSettings, ManageStudents, LinkParents, ClassesSubjects, EnterGrades, RegistryManager, CreateTeacher } from "./AdminPages";
 import Login from "./auth/Login";
 import { hasSupabaseConfig } from "./lib/supabase";
 import * as API from "./lib/api";
@@ -240,6 +240,7 @@ function Shell({ demo = false }) {
   const notify = (msg) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
   // Load live data when a real backend is connected.
+  const [wardsLoaded, setWardsLoaded] = useState(false);
   useEffect(() => {
     if (demo) return;
     (async () => {
@@ -247,11 +248,15 @@ function Shell({ demo = false }) {
       if (w.length) {
         const mapped = w.map(s => ({
           id: s.id, name: s.full_name, avatar: s.avatar_initials || "?",
-          grade: s.class_levels?.name || "", house: s.house,
+          grade: s.registry_class || s.class_levels?.name || "", house: s.house,
         }));
         setWards(mapped);
         setWard(mapped[0]);
+      } else {
+        setWards([]);
+        setWard(null);
       }
+      setWardsLoaded(true);
     })();
   }, [demo]);
 
@@ -277,6 +282,7 @@ function Shell({ demo = false }) {
     { id: "manage-students", label: "Students", icon: UserPlus, section: "Admin" },
     { id: "registry", label: "Registry (live)", icon: Database, section: "Admin" },
     { id: "link-parents", label: "Link Parents", icon: Link2, section: "Admin" },
+    { id: "create-teacher", label: "Create Teachers", icon: UserPlus, section: "Admin" },
     { id: "classes-subjects", label: "Classes & Subjects", icon: Users, section: "Admin" },
     { id: "school-settings", label: "School Identity", icon: SettingsIcon, section: "Admin" },
   ];
@@ -354,6 +360,10 @@ function Shell({ demo = false }) {
       {/* ---------- Main ---------- */}
       <main className="main-pad" style={{ flex: 1, padding: "28px 32px", maxWidth: "100%", overflowX: "hidden", marginTop: 0 }}>
         <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          {role === "parent" && !demo && wardsLoaded && wards.length === 0 && ["dashboard","grades","quiz-results","attendance","records"].includes(tab) ? (
+            <NoWards profile={profile} />
+          ) : (
+          <>
           {tab === "dashboard" && <Dashboard ward={ward} setTab={setTab} role={role} profile={profile} />}
           {tab === "messages" && <Messages threads={threads} active={activeThread} setActive={setActiveThread} draft={draft} setDraft={setDraft} send={sendMessage} role={role} />}
           {tab === "grades" && <Grades ward={ward} role={role} demo={demo} notify={notify} setTab={setTab} />}
@@ -367,8 +377,11 @@ function Shell({ demo = false }) {
           {tab === "manage-students" && <ManageStudents />}
           {tab === "registry" && <RegistryManager />}
           {tab === "link-parents" && <LinkParents />}
+          {tab === "create-teacher" && <CreateTeacher />}
           {tab === "classes-subjects" && <ClassesSubjects />}
           {tab === "school-settings" && <SchoolSettings />}
+          </>
+          )}
         </div>
       </main>
 
@@ -1019,6 +1032,26 @@ function MiniStat({ label, value, tone }) {
       <div style={{ fontSize: 12, color: C.mut, marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 700, color: toneColor, fontFamily: font.display }}>{value}</div>
     </Card>
+  );
+}
+
+function NoWards({ profile }) {
+  const first = profile?.full_name?.split(" ")[0] || "there";
+  return (
+    <>
+      <PageHead eyebrow="Welcome" title={`Hello, ${first}`} sub="Let's get your ward set up." />
+      <Card style={{ borderLeft: `4px solid ${C.gold}`, textAlign: "center", padding: "34px 24px" }}>
+        <div style={{ width: 54, height: 54, borderRadius: 15, background: C.goldSoft, display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
+          <GraduationCap size={26} color={C.ink} />
+        </div>
+        <div style={{ fontWeight: 700, color: C.ink, fontSize: 17, marginBottom: 6 }}>No ward linked yet</div>
+        <p style={{ color: C.mut, fontSize: 14, lineHeight: 1.6, maxWidth: 420, margin: "0 auto" }}>
+          Your account is ready, but no child is linked to it yet. Please contact the
+          school office to have your ward added, or sign out and use "Create a parent
+          account" to add your ward by class and name.
+        </p>
+      </Card>
+    </>
   );
 }
 
