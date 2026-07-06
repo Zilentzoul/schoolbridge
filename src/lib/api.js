@@ -131,6 +131,10 @@ export async function getEvents() {
   return data || [];
 }
 
+export async function createEvent(row) {
+  return supabase.from("events").insert(row).select();
+}
+
 // ---- Terms ----
 export async function getCurrentTerm() {
   const { data } = await supabase.from("terms").select("*").eq("is_current", true).single();

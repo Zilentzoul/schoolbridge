@@ -364,7 +364,7 @@ function Shell({ demo = false }) {
             <NoWards profile={profile} />
           ) : (
           <>
-          {tab === "dashboard" && <Dashboard ward={ward} setTab={setTab} role={role} profile={profile} />}
+          {tab === "dashboard" && <Dashboard ward={ward} setTab={setTab} role={role} profile={profile} demo={demo} />}
           {tab === "messages" && <Messages threads={threads} active={activeThread} setActive={setActiveThread} draft={draft} setDraft={setDraft} send={sendMessage} role={role} />}
           {tab === "grades" && <Grades ward={ward} role={role} demo={demo} notify={notify} setTab={setTab} />}
           {tab === "quiz-results" && <QuizResults ward={ward} demo={demo} />}
@@ -542,107 +542,105 @@ function PageHead({ eyebrow, title, sub, right }) {
 }
 
 // ========================= DASHBOARD =========================
-function Dashboard({ ward, setTab, role = "parent", profile }) {
-  const first = ward?.name?.split(" ")[0] || "your ward";
-  const isStaff = role !== "parent";
-  const stats = isStaff ? [
-    { label: "Class Average", value: "82%", tone: "sage", icon: Award, delta: "Basic 6 - Blue" },
-    { label: "Attendance Today", value: "26/28", tone: "sky", icon: UserCheck, delta: "2 absent" },
-    { label: "Assignments Set", value: "4", tone: "gold", icon: ClipboardList, delta: "1 due this week" },
-    { label: "Open Messages", value: "3", tone: "clay", icon: MessageSquare, delta: "From parents" },
-  ] : [
-    { label: "Overall Average", value: "88%", tone: "sage", icon: Award, delta: "+4 this term" },
-    { label: "Attendance", value: "97%", tone: "sky", icon: UserCheck, delta: "1 late day" },
-    { label: "Assignments Due", value: "1", tone: "gold", icon: ClipboardList, delta: "Fractions — Sat" },
-    { label: "Conduct", value: "Excellent", tone: "sage", icon: Star, delta: "Term 3" },
-  ];
+function Dashboard({ ward, setTab, role = "parent", profile, demo }) {
+  const { settings } = useSettings();
+  const url = settings?.registry_api_url;
   const greetName = profile?.full_name?.split(" ")[0] || "there";
+  const isStaff = role !== "parent";
+
+  const [data, setData] = useState({ loading: true, quizzes: [], attendance: null, grades: [] });
+
+  useEffect(() => {
+    if (demo || isStaff || !ward?.name) { setData({ loading: false, quizzes: [], attendance: null, grades: [] }); return; }
+    let alive = true;
+    setData((d) => ({ ...d, loading: true }));
+    (async () => {
+      let quizzes = [], attendance = null, grades = [];
+      try { grades = await API.getGrades(ward.id); } catch { grades = []; }
+      if (url) {
+        try { const q = await getQuizResults(url, ward.grade, ward.name); quizzes = q.results || []; } catch {}
+        try { const a = await getAttendanceForStudent(url, ward.grade, ward.name); attendance = a.summary; } catch {}
+      }
+      if (alive) setData({ loading: false, quizzes, attendance, grades });
+    })();
+    return () => { alive = false; };
+  }, [demo, isStaff, url, ward?.name, ward?.grade, ward?.id]);
+
+  // Compute real headline stats for a parent.
+  const avgQuiz = data.quizzes.length
+    ? Math.round(data.quizzes.reduce((a, q) => a + (q.pct || 0), 0) / data.quizzes.length) : null;
+  const avgGrade = data.grades.length
+    ? Math.round(data.grades.reduce((a, g) => a + (g.total || 0), 0) / data.grades.length) : null;
+
+  const parentStats = [
+    { label: "Term average", value: avgGrade != null ? `${avgGrade}%` : "—", tone: "sage", icon: Award, delta: avgGrade != null ? "From report" : "No grades yet" },
+    { label: "Attendance", value: data.attendance?.pct != null ? `${data.attendance.pct}%` : "—", tone: "sky", icon: UserCheck, delta: data.attendance ? `${data.attendance.present}/${data.attendance.total} days` : "No records yet" },
+    { label: "Quizzes taken", value: data.quizzes.length || "—", tone: "gold", icon: ClipboardList, delta: avgQuiz != null ? `${avgQuiz}% average` : "None yet" },
+    { label: "Best quiz", value: data.quizzes.length ? `${Math.max(...data.quizzes.map(q => q.pct || 0))}%` : "—", tone: "sage", icon: Star, delta: data.quizzes.length ? "Well done" : "—" },
+  ];
+
   return (
     <>
-      <PageHead eyebrow="Overview" title={`Good morning, ${greetName}`}
-        sub={isStaff ? "Your class at a glance." : `Here's how ${first} is doing at a glance.`}
-        right={<button className="btn" onClick={() => setTab("messages")} style={primaryBtn}><MessageSquare size={16} /> {isStaff ? "Open messages" : "Message a teacher"}</button>} />
+      <PageHead eyebrow="Overview" title={`Hello, ${greetName}`}
+        sub={isStaff ? "Your portal at a glance." : ward ? `How ${ward.name.split(" ")[0]} is doing at a glance.` : "Your portal at a glance."}
+        right={<button className="btn" onClick={() => setTab("messages")} style={primaryBtn}><MessageSquare size={16} /> Message a teacher</button>} />
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
-        {stats.map(s => (
-          <Card key={s.label} pad={16}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: chipBg(s.tone), display: "grid", placeItems: "center" }}>
-                <s.icon size={18} color={chipFg(s.tone)} />
-              </div>
-            </div>
-            <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 600, marginTop: 12, letterSpacing: -0.5 }}>{s.value}</div>
-            <div style={{ fontSize: 12.5, color: C.mut, marginTop: 2 }}>{s.label}</div>
-            <div style={{ fontSize: 11.5, color: chipFg(s.tone), fontWeight: 600, marginTop: 6 }}>{s.delta}</div>
-          </Card>
-        ))}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1.6fr 1fr", gap: 16 }}>
-        <Card>
-          <SectionTitle action={<Chip tone="sage">Trending up</Chip>}>Academic progress</SectionTitle>
-          <ResponsiveContainer width="100%" height={230}>
-            <AreaChart data={GRADE_TREND} margin={{ left: -18, right: 8, top: 8 }}>
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={C.gold} stopOpacity={0.35} />
-                  <stop offset="100%" stopColor={C.gold} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-              <XAxis dataKey="term" tick={{ fontSize: 11, fill: C.mut }} axisLine={false} tickLine={false} />
-              <YAxis domain={[60, 100]} tick={{ fontSize: 11, fill: C.mut }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Area type="monotone" dataKey="Ama" stroke={C.gold} strokeWidth={2.5} fill="url(#g1)" />
-            </AreaChart>
-          </ResponsiveContainer>
+      {isStaff ? (
+        <Card style={{ borderLeft: `4px solid ${C.gold}` }}>
+          <p style={{ margin: 0, color: C.mut, fontSize: 14, lineHeight: 1.6 }}>
+            Welcome. Use the menu to manage the registry, enter grades, create staff logins, and set your school identity.
+          </p>
         </Card>
+      ) : data.loading ? (
+        <Card><div style={{ display: "flex", alignItems: "center", gap: 10, color: C.mut }}><Loader2 size={18} className="spin" /> Loading {ward?.name?.split(" ")[0] || "your ward"}'s latest…</div></Card>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 20 }}>
+            {parentStats.map(s => (
+              <Card key={s.label} pad={16}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: chipBg(s.tone), display: "grid", placeItems: "center" }}>
+                  <s.icon size={18} color={chipFg(s.tone)} />
+                </div>
+                <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 600, marginTop: 12, letterSpacing: -0.5 }}>{s.value}</div>
+                <div style={{ fontSize: 12.5, color: C.mut, marginTop: 2 }}>{s.label}</div>
+                <div style={{ fontSize: 11.5, color: chipFg(s.tone), fontWeight: 600, marginTop: 6 }}>{s.delta}</div>
+              </Card>
+            ))}
+          </div>
 
-        <Card>
-          <SectionTitle>Skill profile</SectionTitle>
-          <ResponsiveContainer width="100%" height={230}>
-            <RadarChart data={RADAR} outerRadius={80}>
-              <PolarGrid stroke={C.line} />
-              <PolarAngleAxis dataKey="skill" tick={{ fontSize: 10.5, fill: C.mut }} />
-              <Radar dataKey="value" stroke={C.ink} fill={C.ink} fillOpacity={0.12} strokeWidth={2} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 16 }}>
-        <Card>
-          <SectionTitle action={<button style={linkBtn} onClick={() => setTab("announcements")}>All <ChevronRight size={14} /></button>}>Latest from school</SectionTitle>
-          {ANNOUNCEMENTS.slice(0, 3).map(a => (
-            <div key={a.id} className="row-hover" style={{ display: "flex", gap: 12, padding: "10px 8px", borderRadius: 10, cursor: "pointer" }}>
-              <div style={{ marginTop: 3 }}><Circle size={8} fill={C.gold} color={C.gold} /></div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{a.title}</div>
-                <div style={{ fontSize: 12, color: C.mut, marginTop: 2 }}>{a.time} · {a.author}</div>
-              </div>
-              <Chip tone={a.tag === "Event" ? "sky" : a.tag === "Academic" ? "sage" : "mut"}>{a.tag}</Chip>
-            </div>
-          ))}
-        </Card>
-
-        <Card>
-          <SectionTitle action={<button style={linkBtn} onClick={() => setTab("calendar")}>Calendar <ChevronRight size={14} /></button>}>Coming up</SectionTitle>
-          {EVENTS.slice(0, 3).map(e => (
-            <div key={e.id} className="row-hover" style={{ display: "flex", gap: 12, padding: "10px 8px", borderRadius: 10, alignItems: "center" }}>
-              <div style={{ width: 44, textAlign: "center", background: C.paper, borderRadius: 9, padding: "6px 0", border: `1px solid ${C.line}` }}>
-                <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{e.date}</div>
-                <div style={{ fontSize: 9.5, color: C.mut, letterSpacing: 0.5 }}>{e.month}</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{e.title}</div>
-                <div style={{ fontSize: 12, color: C.mut }}>{e.time} · {e.ward}</div>
-              </div>
-            </div>
-          ))}
-        </Card>
-      </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <Card>
+              <SectionTitle action={<button style={linkBtn} onClick={() => setTab("quiz-results")}>All <ChevronRight size={14} /></button>}>Recent quizzes</SectionTitle>
+              {data.quizzes.length === 0 ? (
+                <EmptyLine>No quiz results yet.</EmptyLine>
+              ) : data.quizzes.slice(0, 4).map((q, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "9px 4px", borderTop: i ? `1px solid ${C.line}` : "none" }}>
+                  <span style={{ fontSize: 13, color: C.ink }}>{q.quiz}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: q.pct >= 70 ? C.sage : q.pct >= 50 ? C.gold : C.clay }}>{q.pct}%</span>
+                </div>
+              ))}
+            </Card>
+            <Card>
+              <SectionTitle action={<button style={linkBtn} onClick={() => setTab("records")}>Records <ChevronRight size={14} /></button>}>Your ward</SectionTitle>
+              {ward ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 4px" }}>
+                  <Avatar text={ward.avatar} size={44} bg={C.ink} color={C.gold} />
+                  <div>
+                    <div style={{ fontWeight: 600, color: C.ink, fontSize: 15 }}>{ward.name}</div>
+                    <div style={{ color: C.mut, fontSize: 13 }}>{ward.grade}</div>
+                  </div>
+                </div>
+              ) : <EmptyLine>No ward linked yet.</EmptyLine>}
+            </Card>
+          </div>
+        </>
+      )}
     </>
   );
+}
+
+function EmptyLine({ children }) {
+  return <div style={{ color: C.mut, fontSize: 13.5, padding: "12px 4px", fontStyle: "italic" }}>{children}</div>;
 }
 
 // ========================= MESSAGES =========================
@@ -1237,7 +1235,93 @@ function Calendar() {
 }
 
 // ========================= ANNOUNCEMENTS =========================
-function Announcements() {
+function Announcements({ role = "parent", demo, notify }) {
+  const isStaff = role !== "parent";
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(!demo);
+  const [showForm, setShowForm] = useState(false);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [tag, setTag] = useState("General");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    if (demo) { setItems(ANNOUNCEMENTS.map(a => ({ id: a.id, title: a.title, body: a.body, tag: a.tag, pinned: a.pin, author: a.author, created_at: a.time }))); setLoading(false); return; }
+    setLoading(true);
+    try { setItems(await API.getAnnouncements()); } catch { setItems([]); }
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, [demo]);
+
+  async function post() {
+    if (!title.trim()) return;
+    setBusy(true);
+    try {
+      await API.createAnnouncement({ title: title.trim(), body: body.trim(), tag });
+      setTitle(""); setBody(""); setTag("General"); setShowForm(false);
+      notify && notify("Announcement posted.");
+      await load();
+    } catch { notify && notify("Couldn't post. Please try again."); }
+    setBusy(false);
+  }
+
+  return (
+    <>
+      <PageHead eyebrow="Broadcast" title="Announcements" sub="Official notices from the school."
+        right={isStaff ? <button className="btn" style={primaryBtn} onClick={() => setShowForm(v => !v)}><Megaphone size={16} /> {showForm ? "Close" : "Post notice"}</button> : null} />
+
+      {isStaff && showForm && (
+        <Card style={{ marginBottom: 16 }}>
+          <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title"
+            style={{ ...inputBox, marginBottom: 10 }} />
+          <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Write the announcement…"
+            rows={3} style={{ ...inputBox, marginBottom: 10, resize: "vertical" }} />
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select value={tag} onChange={e => setTag(e.target.value)} style={{ ...inputBox, width: "auto" }}>
+              {["General", "Academic", "Event"].map(t => <option key={t}>{t}</option>)}
+            </select>
+            <button style={{ ...primaryBtn, opacity: busy ? 0.7 : 1 }} onClick={post} disabled={busy}>
+              {busy ? <Loader2 size={15} className="spin" /> : <Megaphone size={15} />} Post
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {loading ? (
+        <Card><div style={{ display: "flex", gap: 10, color: C.mut }}><Loader2 size={18} className="spin" /> Loading notices…</div></Card>
+      ) : items.length === 0 ? (
+        <Card><EmptyLine>No announcements yet.{isStaff ? " Use \u201CPost notice\u201D to share one." : ""}</EmptyLine></Card>
+      ) : (
+        <div style={{ display: "grid", gap: 14 }}>
+          {items.map(a => {
+            const author = a.author || a.profiles?.full_name || "School";
+            const when = a.created_at ? new Date(a.created_at).toLocaleDateString() : "";
+            return (
+              <Card key={a.id} style={{ borderLeft: a.pinned ? `3px solid ${C.gold}` : `1px solid ${C.line}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {a.pinned && <Star size={16} fill={C.gold} color={C.gold} />}
+                    <h3 style={{ fontFamily: font.display, fontSize: 18, margin: 0, fontWeight: 600 }}>{a.title}</h3>
+                  </div>
+                  {a.tag && <Chip tone={a.tag === "Event" ? "sky" : a.tag === "Academic" ? "sage" : "mut"}>{a.tag}</Chip>}
+                </div>
+                {a.body && <p style={{ fontSize: 13.5, color: C.inkSoft, lineHeight: 1.6, margin: "0 0 10px" }}>{a.body}</p>}
+                <div style={{ fontSize: 12, color: C.mut, display: "flex", alignItems: "center", gap: 6 }}>
+                  <Megaphone size={13} /> {author}{when ? ` · ${when}` : ""}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+const inputBox = { width: "100%", padding: "10px 12px", borderRadius: 9, border: `1px solid ${C.line}`, fontSize: 14, outline: "none", fontFamily: "inherit" };
+
+// ========================= OLD ANNOUNCEMENTS (removed) =========================
+function AnnouncementsOld() {
   return (
     <>
       <PageHead eyebrow="Broadcast" title="Announcements" sub="Official notices from the school. You'll never miss one." />

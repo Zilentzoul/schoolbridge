@@ -6,6 +6,9 @@
 [build.environment]
   NODE_VERSION = "20"
 
+# SPA fallback — every route serves index.html so client-side routing works.
+# Netlify automatically serves /.netlify/functions/* before this rule, so
+# serverless function calls are not affected by the fallback.
 [[redirects]]
   from = "/*"
   to = "/index.html"
