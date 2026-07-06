@@ -136,3 +136,73 @@ export async function getCurrentTerm() {
   const { data } = await supabase.from("terms").select("*").eq("is_current", true).single();
   return data;
 }
+
+// ---- School settings (white-label) ----
+export async function getSchoolSettings() {
+  const { data } = await supabase.from("school_settings").select("*").eq("id", 1).single();
+  return data;
+}
+
+export async function updateSchoolSettings(patch) {
+  return supabase.from("school_settings")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", 1)
+    .select();
+}
+
+// ---- Admin: class levels & subjects ----
+export async function getClassLevels() {
+  const { data } = await supabase.from("class_levels").select("*").order("name");
+  return data || [];
+}
+export async function createClassLevel(row) {
+  return supabase.from("class_levels").insert(row).select();
+}
+export async function createSubject(row) {
+  return supabase.from("subjects").insert(row).select();
+}
+
+// ---- Admin: students ----
+export async function getAllStudents() {
+  const { data } = await supabase
+    .from("students")
+    .select("*, class_levels(name)")
+    .order("full_name");
+  return data || [];
+}
+export async function createStudent(row) {
+  const initials = (row.full_name || "")
+    .split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  return supabase.from("students").insert({ ...row, avatar_initials: initials }).select();
+}
+
+// ---- Admin: link a parent to a student ----
+export async function getParents() {
+  const { data } = await supabase
+    .from("profiles").select("id, full_name, role")
+    .eq("role", "parent").order("full_name");
+  return data || [];
+}
+export async function linkParentToStudent(parentId, studentId) {
+  return supabase.from("guardianships")
+    .insert({ parent_id: parentId, student_id: studentId }).select();
+}
+export async function getGuardianships() {
+  const { data } = await supabase
+    .from("guardianships")
+    .select("id, parent:parent_id(full_name), student:student_id(full_name)")
+    .order("id", { ascending: false });
+  return data || [];
+}
+
+// ---- Teacher: enter a grade ----
+export async function getSubjects(classLevelId) {
+  let q = supabase.from("subjects").select("*").order("name");
+  if (classLevelId) q = q.eq("class_level_id", classLevelId);
+  const { data } = await q;
+  return data || [];
+}
+export async function getTerms() {
+  const { data } = await supabase.from("terms").select("*").order("name");
+  return data || [];
+}

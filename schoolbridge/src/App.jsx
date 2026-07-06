@@ -12,7 +12,10 @@ import {
   AreaChart, Area, Cell
 } from "recharts";
 import { LogOut, Loader2 } from "lucide-react";
+import { Building2, UserPlus, Link2, PenSquare, ExternalLink, Settings as SettingsIcon } from "lucide-react";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import { SettingsProvider, useSettings } from "./lib/SettingsProvider";
+import { SchoolSettings, ManageStudents, LinkParents, ClassesSubjects, EnterGrades } from "./AdminPages";
 import Login from "./auth/Login";
 import { hasSupabaseConfig } from "./lib/supabase";
 import * as API from "./lib/api";
@@ -192,7 +195,9 @@ const Avatar = ({ text, size = 40, bg = C.ink, color = "#fff" }) => (
 export default function App() {
   return (
     <AuthProvider>
-      <Gate />
+      <SettingsProvider>
+        <Gate />
+      </SettingsProvider>
     </AuthProvider>
   );
 }
@@ -248,7 +253,10 @@ function Shell({ demo = false }) {
     })();
   }, [demo]);
 
-  const nav = [
+  const { settings } = useSettings();
+  const brand = { primary: settings.primary_color, accent: settings.accent_color };
+
+  const baseNav = [
     { id: "dashboard", label: "Overview", icon: LayoutDashboard },
     { id: "messages", label: "Messages", icon: MessageSquare },
     { id: "grades", label: "Grades", icon: GraduationCap },
@@ -257,6 +265,19 @@ function Shell({ demo = false }) {
     { id: "calendar", label: "Calendar", icon: CalendarDays },
     { id: "announcements", label: "Announcements", icon: Megaphone },
   ];
+  const teacherNav = [
+    { id: "enter-grades", label: "Enter Grades", icon: PenSquare, section: "Staff" },
+  ];
+  const adminNav = [
+    { id: "enter-grades", label: "Enter Grades", icon: PenSquare, section: "Staff" },
+    { id: "manage-students", label: "Students", icon: UserPlus, section: "Admin" },
+    { id: "link-parents", label: "Link Parents", icon: Link2, section: "Admin" },
+    { id: "classes-subjects", label: "Classes & Subjects", icon: Users, section: "Admin" },
+    { id: "school-settings", label: "School Identity", icon: SettingsIcon, section: "Admin" },
+  ];
+  const nav = role === "admin" ? [...baseNav, ...adminNav]
+            : role === "teacher" ? [...baseNav, ...teacherNav]
+            : baseNav;
 
   const sendMessage = () => {
     if (!draft.trim()) return;
@@ -280,25 +301,19 @@ function Shell({ demo = false }) {
     }}>
       {/* ---------- Sidebar (desktop) ---------- */}
       <aside className="sidebar-desktop" style={{
-        width: 250, background: C.ink, color: "#fff", padding: "24px 16px",
+        width: 250, background: brand.primary, color: "#fff", padding: "24px 16px",
         display: "flex", flexDirection: "column", position: "sticky", top: 0, height: "100vh",
       }}>
-        <Brand />
+        <Brand settings={settings} />
         {role === "parent" && <WardSwitcher wards={wards} ward={ward} setWard={setWard} />}
         {role !== "parent" && <RoleBadge role={role} />}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
-          {nav.map(n => (
-            <button key={n.id} className="nav-item" onClick={() => setTab(n.id)}
-              style={navBtnStyle(tab === n.id)}>
-              <n.icon size={18} strokeWidth={2} />
-              <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
-              {n.badge && <span style={badgeStyle}>{n.badge}</span>}
-            </button>
-          ))}
-        </nav>
+        <div style={{ overflowY: "auto", flex: 1 }}>
+          <NavList nav={nav} tab={tab} setTab={setTab} accent={brand.accent} />
+          <StaffLink settings={settings} role={role} accent={brand.accent} />
+        </div>
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: C.inkSoft, borderRadius: 12, fontSize: 12, color: "#B8C4D4", marginBottom: 10 }}>
-            <Shield size={15} color={C.gold} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px", background: "rgba(255,255,255,0.08)", borderRadius: 12, fontSize: 12, color: "#DCE3EC", marginBottom: 10 }}>
+            <Shield size={15} color={brand.accent} />
             <span>All contact stays inside the school. No personal numbers shared.</span>
           </div>
           <ProfileFooter profile={profile} onSignOut={() => auth?.signOut?.()} demo={demo} />
@@ -307,29 +322,23 @@ function Shell({ demo = false }) {
 
       {/* ---------- Mobile top bar ---------- */}
       <div className="topbar-mobile" style={{
-        position: "fixed", top: 0, left: 0, right: 0, zIndex: 40, background: C.ink,
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 40, background: brand.primary,
         color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", gap: 12,
       }}>
         <button onClick={() => setMobileNav(true)} style={{ background: "none", border: "none", color: "#fff" }}><Menu size={22} /></button>
-        <span style={{ fontFamily: font.display, fontWeight: 600, fontSize: 18 }}>SchoolBridge</span>
+        <span style={{ fontFamily: font.display, fontWeight: 600, fontSize: 18 }}>{settings.school_name || "SchoolBridge"}</span>
       </div>
 
       {mobileNav && (
         <div onClick={() => setMobileNav(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }}>
-          <div onClick={e => e.stopPropagation()} style={{ width: 260, height: "100%", background: C.ink, color: "#fff", padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ width: 270, height: "100%", background: brand.primary, color: "#fff", padding: 20, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <Brand />
+              <Brand settings={settings} />
               <button onClick={() => setMobileNav(false)} style={{ background: "none", border: "none", color: "#fff" }}><X size={20} /></button>
             </div>
             {role === "parent" && <WardSwitcher wards={wards} ward={ward} setWard={setWard} />}
-            <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              {nav.map(n => (
-                <button key={n.id} onClick={() => { setTab(n.id); setMobileNav(false); }} style={navBtnStyle(tab === n.id)}>
-                  <n.icon size={18} /><span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
-                  {n.badge && <span style={badgeStyle}>{n.badge}</span>}
-                </button>
-              ))}
-            </nav>
+            <NavList nav={nav} tab={tab} setTab={(t) => { setTab(t); setMobileNav(false); }} accent={brand.accent} />
+            <StaffLink settings={settings} role={role} accent={brand.accent} />
             <div style={{ marginTop: 16 }}>
               <ProfileFooter profile={profile} onSignOut={() => auth?.signOut?.()} demo={demo} />
             </div>
@@ -347,6 +356,11 @@ function Shell({ demo = false }) {
           {tab === "assignments" && <Assignments role={role} />}
           {tab === "calendar" && <Calendar role={role} />}
           {tab === "announcements" && <Announcements role={role} notify={notify} demo={demo} />}
+          {tab === "enter-grades" && <EnterGrades />}
+          {tab === "manage-students" && <ManageStudents />}
+          {tab === "link-parents" && <LinkParents />}
+          {tab === "classes-subjects" && <ClassesSubjects />}
+          {tab === "school-settings" && <SchoolSettings />}
         </div>
       </main>
 
@@ -366,17 +380,70 @@ function Shell({ demo = false }) {
 }
 
 // ---------- Brand + nav pieces ----------
-function Brand() {
+function Brand({ settings }) {
+  const s = settings || {};
+  const name = s.school_name || "SchoolBridge";
+  const tag = s.tagline || "School Portal";
+  const accent = s.accent_color || C.gold;
+  const primary = s.primary_color || C.ink;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 22, paddingLeft: 4 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 9, background: C.gold, display: "grid", placeItems: "center" }}>
-        <GraduationCap size={20} color={C.ink} strokeWidth={2.4} />
+      <div style={{ width: 34, height: 34, borderRadius: 9, background: accent, display: "grid", placeItems: "center", overflow: "hidden", flexShrink: 0 }}>
+        {s.logo_url
+          ? <img src={s.logo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} onError={(e) => { e.target.style.display = "none"; }} />
+          : <GraduationCap size={20} color={primary} strokeWidth={2.4} />}
       </div>
-      <div>
-        <div style={{ fontFamily: font.display, fontWeight: 600, fontSize: 18, lineHeight: 1 }}>SchoolBridge</div>
-        <div style={{ fontSize: 10.5, color: "#8FA0B5", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>School Portal</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontFamily: font.display, fontWeight: 600, fontSize: 16.5, lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+        <div style={{ fontSize: 10, color: "#8FA0B5", letterSpacing: 1, textTransform: "uppercase", marginTop: 2 }}>{tag}</div>
       </div>
     </div>
+  );
+}
+
+// Renders nav with section dividers (Staff / Admin) and brand accent on active
+function NavList({ nav, tab, setTab, accent }) {
+  let lastSection = null;
+  return (
+    <nav style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
+      {nav.map(n => {
+        const showHeader = n.section && n.section !== lastSection;
+        lastSection = n.section || lastSection;
+        const active = tab === n.id;
+        return (
+          <React.Fragment key={n.id}>
+            {showHeader && (
+              <div style={{ fontSize: 9.5, color: "#8FA0B5", letterSpacing: 1.2, textTransform: "uppercase", fontWeight: 700, margin: "14px 12px 4px" }}>{n.section}</div>
+            )}
+            <button className="nav-item" onClick={() => setTab(n.id)} style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "10px 12px",
+              background: active ? accent : "transparent", color: active ? "#12233B" : "#C6D0DD",
+              border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13.5,
+              fontWeight: active ? 600 : 500, width: "100%", transition: "background .15s",
+            }}>
+              <n.icon size={18} strokeWidth={2} />
+              <span style={{ flex: 1, textAlign: "left" }}>{n.label}</span>
+              {n.badge && <span style={badgeStyle}>{n.badge}</span>}
+            </button>
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
+}
+
+// Link out to the school's existing staff platform (shown to staff only)
+function StaffLink({ settings, role, accent }) {
+  if (role === "parent" || !settings?.staff_platform_url) return null;
+  return (
+    <a href={settings.staff_platform_url} target="_blank" rel="noopener noreferrer" style={{
+      display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", marginTop: 8,
+      background: "rgba(255,255,255,0.06)", color: "#fff", borderRadius: 10, textDecoration: "none",
+      fontSize: 13.5, fontWeight: 500, border: "1px dashed rgba(255,255,255,0.2)",
+    }}>
+      <ExternalLink size={17} color={accent} />
+      <span style={{ flex: 1 }}>{settings.staff_platform_label || "Staff Tools"}</span>
+    </a>
   );
 }
 

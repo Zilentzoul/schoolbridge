@@ -23,6 +23,8 @@ input, textarea, button { font-family: 'Inter', system-ui, sans-serif; }
 .btn:hover { filter: brightness(1.06); }
 
 @keyframes slideUp { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 900px) {
   .sidebar-desktop { display: none !important; }
