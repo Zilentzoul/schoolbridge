@@ -1,0 +1,116 @@
+OPTIONAL — Show parents EVERY quiz (standard + custom + revision)
+=================================================================
+
+WHY
+---
+Your class scripts already have two readers:
+  • getResults        → reads ONLY the fixed standard quiz tabs (TAB_MAP)
+  • getAllResults     → reads EVERY result tab (standard + custom + revision)
+
+The parent portal uses the per-student reader, which today is the
+"fixed tabs only" one — so parents see standard quizzes but miss custom
+and revision quizzes.
+
+This snippet adds ONE new action, getAllForStudent, that scans every
+result tab (exactly like getAllResults) but returns just one student's
+rows. It changes nothing that already works. SchoolBridge will use it
+automatically once it's in place, and falls back to the old reader until
+then — so adding it is safe and nothing breaks in between.
+
+WHERE TO ADD IT
+---------------
+Add this to EACH class script (Basic 4, 5, 6, 7, 8, 9). The SAME block
+works in all of them — it reuses each script's own TAB_MAP, SHEET_ID,
+getRegistryNames and fuzzyMatch.
+
+STEP 1 — Register the action.
+In each script's doGet(e), find this line:
+
+    if (action === 'getAllResults')    return getAllResults();
+
+Add this line right AFTER it:
+
+    if (action === 'getAllForStudent') return getAllForStudent(cls, name);
+
+STEP 2 — Add the function.
+Paste this function anywhere in the same script (e.g. just below
+getAllResults):
+
+function getAllForStudent(cls, nameLower) {
+  // Match the SAME way the write path stores names, so a slightly
+  // mistyped name still finds its saved rows.
+  var reg = (function(){ try { return getRegistryNames(cls); } catch(_e){ return []; } })();
+  var wanted = (reg.length ? (fuzzyMatch(nameLower, reg) || nameLower) : nameLower)
+                 .toString().toLowerCase().trim();
+  var clsLc = (cls || '').toString().toLowerCase().trim();
+
+  var out = [];
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  ss.getSheets().forEach(function(sheet){
+    var nm = sheet.getName();
+    if (nm === '_Devices' || nm.charAt(0) === '_') return;
+    if (/^(Overview|Attendance|Settings|Registry|Names)$/i.test(nm)) return;
+    var values = sheet.getDataRange().getValues();
+    if (!values.length) return;
+    var h0 = String((values[0] && values[0][0]) || '').toLowerCase().trim();
+    var isFixed = Object.values(TAB_MAP).indexOf(nm) !== -1;
+    if (h0 !== 'timestamp' && !isFixed) return;
+
+    values.slice(1).forEach(function(r){
+      if (!r[1]) return;
+      var stored = (r[1] || '').toString().toLowerCase().trim();
+      var rowCls = (r[2] || '').toString().toLowerCase().trim();
+      // Name match: exact, corrected, or first+last token (same as write path).
+      var nameOk = false;
+      if (stored === wanted) nameOk = true;
+      else if (stored === (nameLower||'').toString().toLowerCase().trim()) nameOk = true;
+      else {
+        var a = stored.split(/\s+/), b = wanted.split(/\s+/);
+        nameOk = a.length && b.length && a[0] === b[0] && a[a.length-1] === b[b.length-1];
+      }
+      if (!nameOk) return;
+      // Class match is lenient: if a class was given, prefer same class,
+      // but still include rows where the stored class is blank.
+      if (clsLc && rowCls && rowCls !== clsLc) return;
+
+      out.push({
+        quiz:  nm,
+        score: r[3] != null ? r[3].toString() : '?',
+        pct:   r[4] != null ? r[4].toString() : '?',
+        date:  r[0] != null ? r[0].toString() : '',
+        tabs:  r[5] || 0,
+        flag:  r[7] || r[6] || ''
+      });
+    });
+  });
+
+  return ContentService
+    .createTextOutput(JSON.stringify({ status: 'ok', results: out }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+STEP 3 — Save each script. No re-deploy needed (a plain save updates the
+running web app). Do it for all six class scripts.
+
+STEP 4 — Tell the Registry to use it (the switch that turns it on).
+The Registry is what the parent portal talks to, and it currently asks
+each class script for "getResults". Point it at the new action instead:
+
+  1. Open your Registry Apps Script (the one with REGISTRY_SHEET_ID).
+  2. Find the function getStudentSubmissions. Inside it, find this line:
+
+       url + '?action=getResults&cls=' + encodeURIComponent(cls) +
+
+  3. Change getResults to getAllForStudent, so it reads:
+
+       url + '?action=getAllForStudent&cls=' + encodeURIComponent(cls) +
+
+  4. Save the Registry script.
+
+That single word is the switch. After it, the parent portal shows every
+quiz — standard, custom, and revision — across all terms. SchoolBridge
+needs no change; it already talks to the Registry.
+
+NOTE: if a class isn't listed in the Registry's QUIZ_SCRIPT_URLS map, its
+quizzes won't come through. All your current classes (Basic 4-9) are
+listed, so you're covered.

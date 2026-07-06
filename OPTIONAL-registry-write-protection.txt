@@ -1,0 +1,38 @@
+OPTIONAL — Registry write protection (only if you want it)
+==========================================================
+
+Your SchoolBridge admin can now edit the registry (add / rename / move /
+remove students) and those changes write to your Google Sheets live.
+
+Right now your Registry's doPost accepts any POST. That's fine while only
+you have the web-app address, but if you'd like the edits to require a
+secret word, you can add a 4-line guard. This is OPTIONAL and changes
+nothing else.
+
+HOW TO ADD IT
+-------------
+1. Open your Registry Apps Script project (the one with REGISTRY_SHEET_ID).
+2. Find the line:   function doPost(e) {
+3. Just AFTER the block that parses `data` (right after the line that says
+   `const action = data.action || '';`), paste this:
+
+    // ---- Optional write protection ----
+    // Set a secret word here. SchoolBridge sends it as data.adminKey.
+    // Leave WRITE_KEY as '' to disable the check (accept all writes).
+    var WRITE_KEY = '';   // e.g. 'faithkids2026'
+    if (WRITE_KEY && String(data.adminKey || '') !== WRITE_KEY) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status:'error', message:'Not authorised.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+4. Change WRITE_KEY to a secret word (any word only staff know).
+5. In SchoolBridge → School Identity → "Admin write key", type the SAME word.
+6. Save the Apps Script (Deploy → Manage deployments → edit → Deploy is only
+   needed if you changed the deployment; a plain save updates the code).
+
+That's it. Now only someone who knows the word can change live records
+from SchoolBridge, while your quiz submissions (which don't send the key
+to a different path) keep working exactly as before.
+
+If you skip this, everything still works — the key field is simply ignored.
